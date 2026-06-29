@@ -1,0 +1,25 @@
+bind            = "0.0.0.0:8080"
+public_base_url = "https://scripts.example.com"
+state_file      = "data/state.json"
+
+[admin]
+username = "admin"
+password = "changeme"
+
+# Optional: Telegram notifications after each successful pull
+#[telegram]
+#bot_token  = "123456:ABC..."
+#api_server = "https://api.telegram.org"   # omit for default
+#send_to    = [-100123456789]
+
+[api]
+require_auth = true   # set false to expose GET /api/scripts publicly
+
+[[repos]]
+# uuid is auto-generated and written back if absent
+name           = "iitc-community"
+git_url        = "https://github.com/IITC-CE/ingress-intel-total-conversion.git"
+local_path     = "/srv/scripts/iitc-community"
+webhook_secret = "your-github-webhook-secret"
+scripts_glob   = "**/*.user.js"
+branch         = "master"

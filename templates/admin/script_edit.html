@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Edit URL Overrides — {{ name }}</h2>
+<p class="uuid">Script UUID: {{ script_uuid }}<br>Repo UUID: {{ repo_uuid }}<br>Slug: <code>{{ url_slug }}</code></p>
+
+<p>Leave a field empty to use the auto-generated URL.</p>
+
+<form method="POST" action="/admin/scripts/{{ repo_uuid }}/{{ script_uuid }}/override">
+  <div class="form-group">
+    <label for="url_override_update">@updateURL override</label>
+    <input type="text" id="url_override_update" name="url_override_update"
+           value="{{ url_override_update }}"
+           placeholder="(auto) …/{{ url_slug }}.meta.js">
+  </div>
+  <div class="form-group">
+    <label for="url_override_download">@downloadURL override</label>
+    <input type="text" id="url_override_download" name="url_override_download"
+           value="{{ url_override_download }}"
+           placeholder="(auto) …/{{ url_slug }}.user.js">
+  </div>
+  <div class="form-actions">
+    <button type="submit">Save</button>
+    <a class="btn btn-danger" href="/admin/">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}

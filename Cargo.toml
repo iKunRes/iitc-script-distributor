@@ -1,0 +1,31 @@
+[package]
+name = "iitc-script-distributor"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "iitc-script-distributor"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["validate-request", "trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
+minijinja = { version = "2", features = ["loader"] }
+glob = "0.3"
+subtle = "2"
+anyhow = "1"
+base64 = "0.22"
+github-webhook-notification = { git = "https://github.com/KunoiSayami/github-webhook-notification.rs.git" }
+
+[profile.release]
+lto = true
+panic = "abort"

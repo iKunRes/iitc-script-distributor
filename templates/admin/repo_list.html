@@ -1,0 +1,61 @@
+{% extends "layout.html" %}
+{% block content %}
+
+{% if flash == "saved" %}
+<div class="flash flash-saved">URL override saved.</div>
+{% elif flash == "pull-started" %}
+<div class="flash flash-pull-started">Pull started in background.</div>
+{% elif flash == "pull-busy" %}
+<div class="flash flash-pull-busy">Pull already in progress, please wait.</div>
+{% endif %}
+
+{% for repo in repos %}
+<div class="repo-header">
+  <h2>{{ repo.name }}</h2>
+  <span class="uuid">{{ repo.uuid }}</span>
+  <form class="inline" method="POST" action="/admin/repos/{{ repo.uuid }}/pull">
+    <button type="submit">Pull now</button>
+  </form>
+</div>
+
+{% if repo.scripts | length == 0 %}
+<p style="color:#999">No scripts discovered yet. Trigger a pull to scan the repository.</p>
+{% else %}
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Version</th>
+      <th>Slug</th>
+      <th>Update URL</th>
+      <th>Download URL</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in repo.scripts %}
+    <tr {% if s.missing %}class="missing"{% endif %}>
+      <td>
+        {{ s.name }}
+        {% if s.has_override %}<span class="override-badge">override</span>{% endif %}
+        {% if s.missing %} <em>(missing)</em>{% endif %}
+      </td>
+      <td>{{ s.version }}</td>
+      <td><code>{{ s.url_slug }}</code></td>
+      <td><a href="{{ s.effective_update_url }}" target="_blank">{{ s.effective_update_url }}</a></td>
+      <td><a href="{{ s.effective_download_url }}" target="_blank">{{ s.effective_download_url }}</a></td>
+      <td>
+        <a class="btn" href="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/edit">Edit</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endfor %}
+
+{% if repos | length == 0 %}
+<p>No repositories configured. Add <code>[[repos]]</code> sections to your <code>config.toml</code>.</p>
+{% endif %}
+
+{% endblock %}
