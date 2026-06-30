@@ -11,6 +11,8 @@
 <div class="flash flash-saved">UUID updated.</div>
 {% elif flash == "uuid-unchanged" %}
 <div class="flash flash-pull-busy">UUID unchanged (empty or same value).</div>
+{% elif flash == "disabled-toggled" %}
+<div class="flash flash-saved">Script access toggled.</div>
 {% endif %}
 
 {% for repo in repos %}
@@ -39,11 +41,12 @@
   </thead>
   <tbody>
     {% for s in repo.scripts %}
-    <tr {% if s.missing %}class="missing"{% endif %}>
+    <tr {% if s.missing %}class="missing"{% elif s.disabled %}class="disabled"{% endif %}>
       <td>
         {{ s.name }}
         {% if s.has_override %}<span class="override-badge">override</span>{% endif %}
         {% if s.missing %} <em>(missing)</em>{% endif %}
+        {% if s.disabled %}<span class="disabled-badge">disabled</span>{% endif %}
       </td>
       <td>{{ s.version }}</td>
       <td><code>{{ s.url_slug }}</code></td>
@@ -52,6 +55,9 @@
       <td style="white-space:nowrap">
         <a class="btn" href="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/edit">Edit</a>
         <a class="btn" href="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/uuid">UUID</a>
+        <form class="inline" method="POST" action="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/toggle-disabled">
+          <button type="submit">{% if s.disabled %}Enable{% else %}Disable{% endif %}</button>
+        </form>
       </td>
     </tr>
     {% endfor %}

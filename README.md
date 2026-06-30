@@ -9,7 +9,7 @@ A self-hosted distribution service for [IITC](https://iitc.app/) userscripts sto
 - **Multi-repo** — tracks multiple Git repositories, each with its own webhook secret and glob pattern.
 - **Stable UUIDs** — each script gets a persistent UUID derived from its repo-relative path. URLs survive file renames only in the same path.
 - **Webhook-triggered pull** — accepts GitHub-style `X-Hub-Signature-256` webhooks and runs `git pull` followed by a rescan.
-- **Admin UI** — HTTP Basic Auth–protected web interface for managing URL overrides and triggering manual pulls.
+- **Admin UI** — HTTP Basic Auth–protected web interface for managing URL overrides, disabling scripts, and triggering manual pulls.
 - **Telegram notifications** — optionally sends commit summaries to a Telegram chat after each successful pull.
 - **Health endpoint** — `GET /health` for reverse-proxy and uptime monitor use.
 
@@ -143,6 +143,7 @@ The admin UI at `/admin/` (HTTP Basic Auth) lets you:
 
 - View all discovered scripts with their effective `@updateURL` / `@downloadURL`
 - Override the URL for any script (useful if you want to point some scripts at an external host)
+- Disable or re-enable individual scripts — disabled scripts return 404 to clients
 - Trigger a `git pull` + rescan for any repo without waiting for a webhook
 
 ## Deploying behind a reverse proxy

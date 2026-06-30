@@ -27,6 +27,7 @@ struct ScriptView {
     effective_download_url: String,
     has_override: bool,
     missing: bool,
+    disabled: bool,
 }
 
 #[derive(Debug)]
@@ -77,6 +78,7 @@ pub async fn list(State(app): State<AppState>, Query(q): Query<FlashQuery>) -> R
                     has_override: entry.url_override_update.is_some()
                         || entry.url_override_download.is_some(),
                     missing: entry.missing,
+                    disabled: entry.disabled,
                 });
             }
         }
@@ -105,6 +107,7 @@ pub async fn list(State(app): State<AppState>, Query(q): Query<FlashQuery>) -> R
                         effective_download_url: s.effective_download_url.clone(),
                         has_override: s.has_override,
                         missing: s.missing,
+                        disabled: s.disabled,
                     })
                 })
                 .collect();
@@ -384,6 +387,29 @@ pub async fn pull_post(State(app): State<AppState>, Path(repo_uuid): Path<String
     Redirect::to("/admin?flash=pull-started").into_response()
 }
 
+pub async fn toggle_disabled_post(
+    State(app): State<AppState>,
+    Path((repo_uuid, script_uuid)): Path<(String, String)>,
+) -> Response {
+    let result = app
+        .state
+        .write_and_save(|state| {
+            if let Some(repo_state) = state.repos.get_mut(&repo_uuid) {
+                if let Some(entry) = repo_state.scripts.get_mut(&script_uuid) {
+                    entry.disabled = !entry.disabled;
+                }
+            }
+        })
+        .await;
+
+    if let Err(e) = result {
+        tracing::error!(error = %e, "failed to save state after toggle disabled");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    Redirect::to("/admin?flash=disabled-toggled").into_response()
+}
+
 fn non_empty(s: String) -> Option<String> {
     if s.trim().is_empty() { None } else { Some(s) }
 }
@@ -420,6 +446,7 @@ struct ScriptViewObj {
     effective_download_url: String,
     has_override: bool,
     missing: bool,
+    disabled: bool,
 }
 
 impl minijinja::value::Object for ScriptViewObj {
@@ -439,6 +466,7 @@ impl minijinja::value::Object for ScriptViewObj {
             }
             "has_override" => Some(minijinja::Value::from(self.has_override)),
             "missing" => Some(minijinja::Value::from(self.missing)),
+            "disabled" => Some(minijinja::Value::from(self.disabled)),
             _ => None,
         }
     }

@@ -105,6 +105,7 @@ pub async fn scan_repo(repo: &RepoConfig, app: &AppState) -> anyhow::Result<()> 
                             url_override_update: None,
                             url_override_download: None,
                             missing: false,
+                            disabled: false,
                         },
                     );
                     new_count += 1;

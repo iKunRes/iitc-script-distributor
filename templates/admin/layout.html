@@ -19,6 +19,9 @@
     td.url-cell { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     tr:hover td { background: #f9f9f9; }
     .missing td { color: #999; text-decoration: line-through; }
+    .disabled td { color: #888; opacity: 0.7; }
+    .disabled-badge { font-size: 0.75rem; background: #7f8c8d; color: #fff; border-radius: 3px; padding: 0.1rem 0.35rem; }
+    .override-badge { font-size: 0.75rem; background: #f39c12; color: #fff; border-radius: 3px; padding: 0.1rem 0.35rem; }
     .repo-header { margin: 1.5rem 0 0.5rem; display: flex; align-items: center; gap: 0.75rem; }
     .repo-header h2 { margin: 0; font-size: 1.1rem; }
     .uuid { font-family: monospace; font-size: 0.8rem; color: #666; }
@@ -27,7 +30,6 @@
     button:hover, .btn:hover { background: #1f6391; }
     .btn-danger { background: #c0392b; }
     .btn-danger:hover { background: #922b21; }
-    .override-badge { font-size: 0.75rem; background: #f39c12; color: #fff; border-radius: 3px; padding: 0.1rem 0.35rem; }
     form.inline { display: inline; }
     input[type=text] { width: 100%; box-sizing: border-box; padding: 0.4rem 0.5rem; border: 1px solid #ccc; border-radius: 3px; font-size: 0.9rem; }
     label { display: block; margin-bottom: 0.25rem; font-weight: bold; font-size: 0.9rem; }

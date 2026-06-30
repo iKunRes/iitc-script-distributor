@@ -31,6 +31,10 @@ pub fn build_router(state: AppState) -> Router {
             get(admin::handlers::script_uuid_form).post(admin::handlers::script_uuid_post),
         )
         .route(
+            "/scripts/{repo_uuid}/{script_uuid}/toggle-disabled",
+            post(admin::handlers::toggle_disabled_post),
+        )
+        .route(
             "/repos/{repo_uuid}/uuid",
             get(admin::handlers::repo_uuid_form).post(admin::handlers::repo_uuid_post),
         )

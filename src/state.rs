@@ -24,6 +24,8 @@ pub struct ScriptEntry {
     pub url_override_download: Option<String>,
     #[serde(default)]
     pub missing: bool,
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 pub struct SharedState {

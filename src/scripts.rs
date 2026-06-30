@@ -231,6 +231,9 @@ pub async fn serve_userscript(
         if entry.missing {
             return StatusCode::NOT_FOUND.into_response();
         }
+        if entry.disabled {
+            return StatusCode::NOT_FOUND.into_response();
+        }
         if entry.url_slug != slug_base {
             return StatusCode::NOT_FOUND.into_response();
         }
