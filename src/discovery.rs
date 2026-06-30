@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 use uuid::Uuid;
 
+use crate::AppState;
 use crate::config::RepoConfig;
 use crate::scripts::{parse_metadata, slug_from_path};
 use crate::state::ScriptEntry;
-use crate::AppState;
 
 pub async fn scan_repo(repo: &RepoConfig, app: &AppState) -> anyhow::Result<()> {
     let repo_uuid = repo.uuid.clone().expect("repo must have uuid before scan");

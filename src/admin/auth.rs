@@ -1,6 +1,6 @@
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::body::Body;
-use axum::http::{header, Request, Response, StatusCode};
+use axum::http::{Request, Response, StatusCode, header};
 use base64::Engine;
 use tower_http::validate_request::{ValidateRequest, ValidateRequestHeaderLayer};
 
@@ -25,26 +25,23 @@ impl BasicAuth {
         use base64::engine::general_purpose::STANDARD;
 
         let encoded = header_value.strip_prefix("Basic ").unwrap_or("");
-        let decoded = match STANDARD.decode(encoded) {
-            Ok(b) => b,
-            Err(_) => return false,
+        let Ok(decoded) = STANDARD.decode(encoded) else {
+            return false;
         };
-        let credentials = match std::str::from_utf8(&decoded) {
-            Ok(s) => s,
-            Err(_) => return false,
+        let Ok(credentials) = std::str::from_utf8(&decoded) else {
+            return false;
         };
-        let (user, pass) = match credentials.split_once(':') {
-            Some(pair) => pair,
-            None => return false,
+
+        let Some((user, pass)) = credentials.split_once(':') else {
+            return false;
         };
 
         if user != self.username {
             return false;
         }
 
-        let parsed_hash = match PasswordHash::new(&self.password_hash) {
-            Ok(h) => h,
-            Err(_) => return false,
+        let Ok(parsed_hash) = PasswordHash::new(&self.password_hash) else {
+            return false;
         };
 
         Argon2::default()

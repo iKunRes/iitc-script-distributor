@@ -18,6 +18,11 @@ pub fn build_env() -> Environment<'static> {
         include_str!("../../templates/admin/script_edit.html").to_string(),
     )
     .expect("script_edit.html template is invalid");
+    env.add_template_owned(
+        "uuid_edit.html",
+        include_str!("../../templates/admin/uuid_edit.html").to_string(),
+    )
+    .expect("uuid_edit.html template is invalid");
     env
 }
 

@@ -1,13 +1,14 @@
+use axum::Form;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect, Response};
-use axum::Form;
 use minijinja::context;
 use serde::Deserialize;
 use std::sync::atomic::Ordering;
+use toml;
 
-use crate::admin::templates::render;
 use crate::AppState;
+use crate::admin::templates::render;
 
 #[derive(Deserialize)]
 pub struct FlashQuery {
@@ -37,7 +38,7 @@ struct RepoView {
 
 pub async fn list(State(app): State<AppState>, Query(q): Query<FlashQuery>) -> Response {
     let state = app.state.read().await;
-    let base = &app.config.public_base_url;
+    let base = app.config.public_base_url.trim_end_matches('/');
 
     let mut repos: Vec<RepoView> = Vec::new();
     for repo_cfg in &app.config.repos {
@@ -190,7 +191,159 @@ pub async fn edit_post(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    Redirect::to("/admin/?flash=saved").into_response()
+    Redirect::to("/admin?flash=saved").into_response()
+}
+
+pub async fn script_uuid_form(
+    State(app): State<AppState>,
+    Path((repo_uuid, script_uuid)): Path<(String, String)>,
+) -> Response {
+    let state = app.state.read().await;
+    let entry = match state
+        .repos
+        .get(&repo_uuid)
+        .and_then(|r| r.scripts.get(&script_uuid))
+    {
+        Some(e) => e.clone(),
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+    drop(state);
+
+    let ctx = context! {
+        kind => "script",
+        label => entry.name,
+        current_uuid => script_uuid,
+        repo_uuid => repo_uuid,
+        back_url => "/admin",
+        post_action => format!("/admin/scripts/{repo_uuid}/{script_uuid}/uuid"),
+    };
+    match render(&app.templates, "uuid_edit.html", ctx) {
+        Ok(html) => Html(html).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "template render failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UuidForm {
+    pub new_uuid: String,
+}
+
+pub async fn script_uuid_post(
+    State(app): State<AppState>,
+    Path((repo_uuid, script_uuid)): Path<(String, String)>,
+    Form(form): Form<UuidForm>,
+) -> Response {
+    let new_uuid = form.new_uuid.trim().to_string();
+    if new_uuid.is_empty() || new_uuid == script_uuid {
+        return Redirect::to("/admin?flash=uuid-unchanged").into_response();
+    }
+
+    let result = app
+        .state
+        .write_and_save(|state| {
+            if let Some(repo_state) = state.repos.get_mut(&repo_uuid) {
+                if let Some(entry) = repo_state.scripts.remove(&script_uuid) {
+                    repo_state.scripts.insert(new_uuid.clone(), entry);
+                }
+            }
+        })
+        .await;
+
+    if let Err(e) = result {
+        tracing::error!(error = %e, "failed to save state after script UUID rename");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    Redirect::to("/admin?flash=uuid-saved").into_response()
+}
+
+pub async fn repo_uuid_form(
+    State(app): State<AppState>,
+    Path(repo_uuid): Path<String>,
+) -> Response {
+    let repo = match app
+        .config
+        .repos
+        .iter()
+        .find(|r| r.uuid.as_deref() == Some(&repo_uuid))
+    {
+        Some(r) => r.clone(),
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    let ctx = context! {
+        kind => "repo",
+        label => repo.name,
+        current_uuid => repo_uuid,
+        repo_uuid => "",
+        back_url => "/admin",
+        post_action => format!("/admin/repos/{repo_uuid}/uuid"),
+    };
+    match render(&app.templates, "uuid_edit.html", ctx) {
+        Ok(html) => Html(html).into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "template render failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+pub async fn repo_uuid_post(
+    State(app): State<AppState>,
+    Path(repo_uuid): Path<String>,
+    Form(form): Form<UuidForm>,
+) -> Response {
+    let new_uuid = form.new_uuid.trim().to_string();
+    if new_uuid.is_empty() || new_uuid == repo_uuid {
+        return Redirect::to("/admin?flash=uuid-unchanged").into_response();
+    }
+
+    // Update state: rename key in repos map
+    let result = app
+        .state
+        .write_and_save(|state| {
+            if let Some(repo_state) = state.repos.remove(&repo_uuid) {
+                state.repos.insert(new_uuid.clone(), repo_state);
+            }
+        })
+        .await;
+
+    if let Err(e) = result {
+        tracing::error!(error = %e, "failed to save state after repo UUID rename");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    // Update config: rewrite the uuid field and save config.toml
+    let mut cfg = (*app.config).clone();
+    for repo in &mut cfg.repos {
+        if repo.uuid.as_deref() == Some(&repo_uuid) {
+            repo.uuid = Some(new_uuid.clone());
+            break;
+        }
+    }
+    match toml::to_string_pretty(&cfg) {
+        Ok(toml_str) => {
+            if let Err(e) = std::fs::write(app.config_path.as_ref(), toml_str) {
+                tracing::error!(error = %e, "failed to write config after repo UUID rename");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "failed to serialize config after repo UUID rename");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
+    tracing::warn!(
+        old = repo_uuid,
+        new = new_uuid,
+        "repo UUID renamed — restart required to take full effect"
+    );
+
+    Redirect::to("/admin?flash=uuid-saved").into_response()
 }
 
 pub async fn pull_post(State(app): State<AppState>, Path(repo_uuid): Path<String>) -> Response {
@@ -210,7 +363,7 @@ pub async fn pull_post(State(app): State<AppState>, Path(repo_uuid): Path<String
     };
 
     if busy.swap(true, Ordering::SeqCst) {
-        return Redirect::to("/admin/?flash=pull-busy").into_response();
+        return Redirect::to("/admin?flash=pull-busy").into_response();
     }
 
     let app_clone = app.clone();
@@ -228,15 +381,11 @@ pub async fn pull_post(State(app): State<AppState>, Path(repo_uuid): Path<String
         }
     });
 
-    Redirect::to("/admin/?flash=pull-started").into_response()
+    Redirect::to("/admin?flash=pull-started").into_response()
 }
 
 fn non_empty(s: String) -> Option<String> {
-    if s.trim().is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    if s.trim().is_empty() { None } else { Some(s) }
 }
 
 // minijinja object wrappers

@@ -1,5 +1,5 @@
 use axum::extract::{Path, State};
-use axum::http::{header, HeaderValue, StatusCode};
+use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use std::path::Path as FsPath;
 
@@ -235,16 +235,17 @@ pub async fn serve_userscript(
             return StatusCode::NOT_FOUND.into_response();
         }
 
+        let base = app.config.public_base_url.trim_end_matches('/');
         let update_url = entry.url_override_update.clone().unwrap_or_else(|| {
             format!(
-                "{}/{repo_uuid}/{script_uuid}/{}.meta.js",
-                app.config.public_base_url, entry.url_slug
+                "{base}/{repo_uuid}/{script_uuid}/{}.meta.js",
+                entry.url_slug
             )
         });
         let download_url = entry.url_override_download.clone().unwrap_or_else(|| {
             format!(
-                "{}/{repo_uuid}/{script_uuid}/{}.user.js",
-                app.config.public_base_url, entry.url_slug
+                "{base}/{repo_uuid}/{script_uuid}/{}.user.js",
+                entry.url_slug
             )
         });
         (entry.relative_path.clone(), update_url, download_url)

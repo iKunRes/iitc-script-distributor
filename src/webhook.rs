@@ -3,7 +3,7 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use github_webhook_notification::datastructures::CommandBundle;
 use github_webhook_notification::server::Command;
-use github_webhook_notification::{compute_signature, GitHubPingEvent, GitHubPushEvent};
+use github_webhook_notification::{GitHubPingEvent, GitHubPushEvent, compute_signature};
 use subtle::ConstantTimeEq;
 
 use crate::AppState;

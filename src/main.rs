@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use argon2::PasswordHasher;
 use clap::Parser;
-use github_webhook_notification::server::{process_send_message, Command};
+use github_webhook_notification::server::{Command, process_send_message};
 use tokio::sync::mpsc;
 use tracing::Level;
 
@@ -24,6 +24,7 @@ use state::SharedState;
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
+    pub config_path: Arc<PathBuf>,
     pub state: Arc<SharedState>,
     pub templates: Arc<minijinja::Environment<'static>>,
     pub pull_busy: Arc<HashMap<String, AtomicBool>>,
@@ -117,6 +118,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app_state = AppState {
         config: Arc::new(cfg.clone()),
+        config_path: Arc::new(args.config.clone()),
         state: shared_state.clone(),
         templates,
         pull_busy: Arc::new(pull_busy),

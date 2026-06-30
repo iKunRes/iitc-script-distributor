@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h2>Edit {{ kind | capitalize }} UUID — {{ label }}</h2>
+<p class="uuid">Current UUID: <code>{{ current_uuid }}</code></p>
+
+{% if kind == "repo" %}
+<p><strong>Warning:</strong> Changing the repo UUID requires a server restart to take effect. The config.toml and state.json will be updated immediately, but the running server still uses the old UUID in memory.</p>
+{% endif %}
+
+<form method="POST" action="{{ post_action }}">
+  <div class="form-group">
+    <label for="new_uuid">New UUID</label>
+    <input type="text" id="new_uuid" name="new_uuid" value="{{ current_uuid }}" required>
+  </div>
+  <div class="form-actions">
+    <button type="submit">Save</button>
+    <a class="btn btn-danger" href="{{ back_url }}">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}
