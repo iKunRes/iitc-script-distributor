@@ -1,7 +1,6 @@
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
@@ -82,6 +81,22 @@ pub struct RepoConfig {
     pub branch: String,
 }
 
+impl RepoConfig {
+    /// Stable identity key used to look up this repo's persistent UUID in the
+    /// state file. Prefers `local_path`; falls back to `git_url` when empty.
+    pub fn identity(&self) -> &str {
+        if !self.local_path.is_empty() {
+            &self.local_path
+        } else {
+            &self.git_url
+        }
+    }
+
+    pub fn set_uuid(&mut self, uuid: String) {
+        self.uuid = Some(uuid);
+    }
+}
+
 fn default_glob() -> String {
     "**/*.user.js".to_string()
 }
@@ -94,21 +109,4 @@ pub fn load_config(path: &Path) -> anyhow::Result<Config> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read config file {}", path.display()))?;
     toml::from_str(&content).context("failed to parse config.toml")
-}
-
-pub fn ensure_repo_uuids(config: &mut Config, config_path: &Path) -> anyhow::Result<bool> {
-    let mut changed = false;
-    for repo in &mut config.repos {
-        if repo.uuid.is_none() {
-            repo.uuid = Some(Uuid::new_v4().to_string());
-            changed = true;
-        }
-    }
-    if changed {
-        let toml_str = toml::to_string_pretty(config).context("failed to serialize config")?;
-        std::fs::write(config_path, toml_str)
-            .with_context(|| format!("failed to write {}", config_path.display()))?;
-        tracing::info!("wrote back config with generated repo UUIDs");
-    }
-    Ok(changed)
 }

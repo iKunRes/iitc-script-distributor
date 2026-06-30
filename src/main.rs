@@ -68,18 +68,6 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mut cfg = config::load_config(&args.config)?;
-    config::ensure_repo_uuids(&mut cfg, &args.config)?;
-
-    // Optionally clone repos whose local_path doesn't exist
-    if args.init_repos {
-        for repo in &cfg.repos {
-            let path = &repo.local_path;
-            if !std::path::Path::new(path).exists() {
-                tracing::info!(path, "cloning repo");
-                git::run_git_clone(&repo.git_url, path, &repo.branch).await?;
-            }
-        }
-    }
 
     // Create state dir if needed
     if let Some(parent) = std::path::Path::new(&cfg.state_file).parent() {
@@ -89,6 +77,27 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let shared_state = Arc::new(SharedState::load(&cfg.state_file)?);
+
+    // Resolve each repo's UUID from the state file (the source of truth), so
+    // UUIDs stay stable even when config.toml is rewritten or regenerated.
+    for repo in &mut cfg.repos {
+        let uuid = shared_state.resolve_repo_uuid(repo.identity()).await?;
+        repo.set_uuid(uuid);
+    }
+
+    // Optionally clone repos whose local_path doesn't exist. Clone failures are
+    // non-fatal: one unreachable remote must not block the whole service.
+    if args.init_repos {
+        for repo in &cfg.repos {
+            let path = &repo.local_path;
+            if !std::path::Path::new(path).exists() {
+                tracing::info!(path, "cloning repo");
+                if let Err(e) = git::run_git_clone(&repo.git_url, path, &repo.branch).await {
+                    tracing::error!(path, error = %e, "git clone failed, skipping repo");
+                }
+            }
+        }
+    }
 
     // Build per-repo busy flags
     let pull_busy: HashMap<String, AtomicBool> = cfg

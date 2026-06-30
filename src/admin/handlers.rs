@@ -5,7 +5,6 @@ use axum::response::{Html, IntoResponse, Redirect, Response};
 use minijinja::context;
 use serde::Deserialize;
 use std::sync::atomic::Ordering;
-use toml;
 
 use crate::AppState;
 use crate::admin::templates::render;
@@ -304,12 +303,18 @@ pub async fn repo_uuid_post(
         return Redirect::to("/admin?flash=uuid-unchanged").into_response();
     }
 
-    // Update state: rename key in repos map
+    // Update state: rename key in repos map and rebind the persistent UUID so
+    // the rename survives restart (state is the source of truth for UUIDs).
     let result = app
         .state
         .write_and_save(|state| {
             if let Some(repo_state) = state.repos.remove(&repo_uuid) {
                 state.repos.insert(new_uuid.clone(), repo_state);
+            }
+            for uuid in state.repo_uuids.values_mut() {
+                if *uuid == repo_uuid {
+                    *uuid = new_uuid.clone();
+                }
             }
         })
         .await;
@@ -319,31 +324,13 @@ pub async fn repo_uuid_post(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    // Update config: rewrite the uuid field and save config.toml
-    let mut cfg = (*app.config).clone();
-    for repo in &mut cfg.repos {
-        if repo.uuid.as_deref() == Some(&repo_uuid) {
-            repo.uuid = Some(new_uuid.clone());
-            break;
-        }
-    }
-    match toml::to_string_pretty(&cfg) {
-        Ok(toml_str) => {
-            if let Err(e) = std::fs::write(app.config_path.as_ref(), toml_str) {
-                tracing::error!(error = %e, "failed to write config after repo UUID rename");
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "failed to serialize config after repo UUID rename");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    }
-
+    // The new UUID is persisted to state and used immediately by the
+    // script-serving routes, but app.config (an immutable Arc) still carries
+    // the old UUID, so webhook/pull lookups need a restart to pick it up.
     tracing::warn!(
         old = repo_uuid,
         new = new_uuid,
-        "repo UUID renamed — restart required to take full effect"
+        "repo UUID renamed — restart required for webhook/pull to use the new UUID"
     );
 
     Redirect::to("/admin?flash=uuid-saved").into_response()
