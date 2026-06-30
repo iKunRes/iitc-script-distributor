@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
+use argon2::PasswordHasher;
 use clap::Parser;
 use github_webhook_notification::server::{process_send_message, Command};
 use tokio::sync::mpsc;
@@ -41,6 +42,13 @@ struct Args {
 
     #[arg(long, help = "Clone missing repo local_paths before starting")]
     init_repos: bool,
+
+    #[arg(
+        long,
+        help = "Hash a password with argon2id and print the PHC string, then exit",
+        value_name = "PASSWORD"
+    )]
+    hash_password: Option<String>,
 }
 
 #[tokio::main]
@@ -48,6 +56,15 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     let args = Args::parse();
+
+    if let Some(password) = args.hash_password {
+        use argon2::Argon2;
+        let hash = Argon2::default()
+            .hash_password(password.as_bytes())
+            .map_err(|e| anyhow::anyhow!("argon2 error: {e}"))?;
+        println!("{hash}");
+        return Ok(());
+    }
 
     let mut cfg = config::load_config(&args.config)?;
     config::ensure_repo_uuids(&mut cfg, &args.config)?;

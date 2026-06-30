@@ -1,3 +1,4 @@
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::body::Body;
 use axum::http::{header, Request, Response, StatusCode};
 use base64::Engine;
@@ -7,17 +8,48 @@ use crate::config::Config;
 
 #[derive(Clone)]
 pub struct BasicAuth {
-    // Pre-encoded expected "Basic <base64(user:pass)>" value
-    expected: String,
+    username: String,
+    // PHC hash string, e.g. $argon2id$v=19$...
+    password_hash: String,
 }
 
 impl BasicAuth {
-    fn new(username: &str, password: &str) -> Self {
-        use base64::engine::general_purpose::STANDARD;
-        let encoded = STANDARD.encode(format!("{username}:{password}"));
+    fn new(username: &str, password_hash: &str) -> Self {
         Self {
-            expected: format!("Basic {encoded}"),
+            username: username.to_string(),
+            password_hash: password_hash.to_string(),
         }
+    }
+
+    fn verify(&self, header_value: &str) -> bool {
+        use base64::engine::general_purpose::STANDARD;
+
+        let encoded = header_value.strip_prefix("Basic ").unwrap_or("");
+        let decoded = match STANDARD.decode(encoded) {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+        let credentials = match std::str::from_utf8(&decoded) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        let (user, pass) = match credentials.split_once(':') {
+            Some(pair) => pair,
+            None => return false,
+        };
+
+        if user != self.username {
+            return false;
+        }
+
+        let parsed_hash = match PasswordHash::new(&self.password_hash) {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+
+        Argon2::default()
+            .verify_password(pass.as_bytes(), &parsed_hash)
+            .is_ok()
     }
 }
 
@@ -31,7 +63,7 @@ impl<B> ValidateRequest<B> for BasicAuth {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
 
-        if auth_header == self.expected {
+        if self.verify(auth_header) {
             Ok(())
         } else {
             Err(Response::builder()

@@ -25,6 +25,7 @@ subtle = "2"
 anyhow = "1"
 base64 = "0.22"
 github-webhook-notification = { git = "https://github.com/KunoiSayami/github-webhook-notification.rs.git" }
+argon2 = { version = "0.6.0-rc.8", features = ["zeroize"] }
 
 [profile.release]
 lto = true

@@ -48,7 +48,7 @@ state_file      = "data/state.json"
 
 [admin]
 username = "admin"
-password = "changeme"
+password = "$argon2id$v=19$m=19456,t=2,p=1$..."   # PHC hash — see "Hashing the admin password" below
 
 # Optional: Telegram notifications after each successful pull
 #[telegram]
@@ -68,6 +68,22 @@ branch         = "master"
 ```
 
 `uuid` fields in `[[repos]]` are auto-generated and written back to `config.toml` on first start.
+
+## Hashing the admin password
+
+The `[admin] password` field must be an **argon2id PHC hash string**, not a plaintext password. Generate one with the built-in subcommand:
+
+```sh
+iitc-script-distributor --hash-password 'your-password-here'
+```
+
+This prints a string like:
+
+```
+$argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>
+```
+
+Paste that entire string as the `password` value in `config.toml`.
 
 ## Running
 
