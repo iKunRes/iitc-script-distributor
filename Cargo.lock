@@ -1101,7 +1101,7 @@ dependencies = [
 
 [[package]]
 name = "iitc-script-distributor"
-version = "0.3.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "argon2",

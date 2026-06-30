@@ -85,6 +85,7 @@ pub fn rewrite_userscript(content: &str, update_url: &str, download_url: &str) -
 
     let mut saw_update = false;
     let mut saw_download = false;
+    let mut injected = false;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -123,6 +124,23 @@ pub fn rewrite_userscript(content: &str, update_url: &str, download_url: &str) -
                     block.push(format!("// @downloadURL   {download_url}"));
                     saw_download = true;
                 } else {
+                    // Inject missing URL directives before the first @match
+                    if !injected
+                        && trimmed
+                            .strip_prefix("//")
+                            .map(|s| s.trim_start().starts_with("@match"))
+                            .unwrap_or(false)
+                    {
+                        if !saw_update {
+                            block.push(format!("// @updateURL     {update_url}"));
+                            saw_update = true;
+                        }
+                        if !saw_download {
+                            block.push(format!("// @downloadURL   {download_url}"));
+                            saw_download = true;
+                        }
+                        injected = true;
+                    }
                     block.push(line.to_string());
                 }
             }
@@ -153,6 +171,7 @@ pub fn extract_metadata_block(content: &str, update_url: &str, download_url: &st
     let mut in_block = false;
     let mut saw_update = false;
     let mut saw_download = false;
+    let mut injected = false;
 
     for line in content.lines() {
         let trimmed = line.trim();
@@ -189,6 +208,23 @@ pub fn extract_metadata_block(content: &str, update_url: &str, download_url: &st
             block.push(format!("// @downloadURL   {download_url}"));
             saw_download = true;
         } else {
+            // Inject missing URL directives before the first @match
+            if !injected
+                && trimmed
+                    .strip_prefix("//")
+                    .map(|s| s.trim_start().starts_with("@match"))
+                    .unwrap_or(false)
+            {
+                if !saw_update {
+                    block.push(format!("// @updateURL     {update_url}"));
+                    saw_update = true;
+                }
+                if !saw_download {
+                    block.push(format!("// @downloadURL   {download_url}"));
+                    saw_download = true;
+                }
+                injected = true;
+            }
             block.push(line.to_string());
         }
     }
@@ -306,6 +342,7 @@ mod tests {
 // @name         Draw Tools
 // @version      0.9.0
 // @description  Draw tools
+// @match        https://intel.ingress.com/*
 // ==/UserScript==
 (function() {})();
 "#;
@@ -344,6 +381,13 @@ mod tests {
         );
         assert!(out.contains("@updateURL     https://new.example.com/draw-tools.meta.js"));
         assert!(out.contains("@downloadURL   https://new.example.com/draw-tools.user.js"));
+        // URL directives must appear before @match
+        let update_pos = out.find("@updateURL").unwrap();
+        let match_pos = out.find("@match").unwrap();
+        assert!(
+            update_pos < match_pos,
+            "@updateURL must appear before @match"
+        );
     }
 
     #[test]

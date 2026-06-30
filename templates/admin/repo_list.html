@@ -1,5 +1,14 @@
 {% extends "layout.html" %}
 {% block content %}
+<script>
+function copyText(text, el) {
+  navigator.clipboard.writeText(text).then(function() {
+    var orig = el.textContent;
+    el.textContent = 'Copied!';
+    setTimeout(function() { el.textContent = orig; }, 1200);
+  });
+}
+</script>
 
 {% if flash == "saved" %}
 <div class="flash flash-saved">URL override saved.</div>
@@ -18,7 +27,7 @@
 {% for repo in repos %}
 <div class="repo-header">
   <h2>{{ repo.name }}</h2>
-  <span class="uuid">{{ repo.uuid }}</span>
+  <span class="uuid uuid-copy" title="Click to copy" onclick="copyText('{{ repo.uuid }}', this)">{{ repo.uuid }}</span>
   <a class="btn" href="/admin/repos/{{ repo.uuid }}/uuid">Edit UUID</a>
   <form class="inline" method="POST" action="/admin/repos/{{ repo.uuid }}/pull">
     <button type="submit">Pull now</button>
@@ -33,8 +42,6 @@
     <tr>
       <th>Name</th>
       <th>Version</th>
-      <th>Slug</th>
-      <th>Update URL</th>
       <th>Download URL</th>
       <th>Actions</th>
     </tr>
@@ -49,12 +56,11 @@
         {% if s.disabled %}<span class="disabled-badge">disabled</span>{% endif %}
       </td>
       <td>{{ s.version }}</td>
-      <td><code>{{ s.url_slug }}</code></td>
-      <td class="url-cell"><a href="{{ s.effective_update_url }}" target="_blank" title="{{ s.effective_update_url }}">{{ s.effective_update_url }}</a></td>
       <td class="url-cell"><a href="{{ s.effective_download_url }}" target="_blank" title="{{ s.effective_download_url }}">{{ s.effective_download_url }}</a></td>
       <td style="white-space:nowrap">
         <a class="btn" href="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/edit">Edit</a>
         <a class="btn" href="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/uuid">UUID</a>
+        <button type="button" onclick="copyText('{{ s.effective_download_url }}', this)">Copy Link</button>
         <form class="inline" method="POST" action="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/toggle-disabled">
           <button type="submit">{% if s.disabled %}Enable{% else %}Disable{% endif %}</button>
         </form>
