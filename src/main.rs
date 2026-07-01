@@ -8,6 +8,7 @@ use clap::Parser;
 use github_webhook_notification::server::{Command, process_send_message};
 use tokio::sync::mpsc;
 use tracing::Level;
+use tracing_subscriber::fmt::time::SystemTime;
 
 mod admin;
 mod config;
@@ -54,7 +55,13 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
+    let under_systemd = std::env::var_os("JOURNAL_STREAM").is_some();
+    let builder = tracing_subscriber::fmt().with_max_level(Level::INFO);
+    if under_systemd {
+        builder.without_time().init();
+    } else {
+        builder.with_timer(SystemTime).init();
+    }
 
     let args = Args::parse();
 
