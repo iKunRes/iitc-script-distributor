@@ -1,7 +1,10 @@
 use axum::extract::{Path, State};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::Path as FsPath;
+use std::time::SystemTime;
 
 use crate::AppState;
 
@@ -236,8 +239,54 @@ pub fn extract_metadata_block(content: &str, update_url: &str, download_url: &st
     result
 }
 
+fn make_etag(body: &str) -> HeaderValue {
+    let mut hasher = DefaultHasher::new();
+    body.hash(&mut hasher);
+    let value = format!("\"{:016x}\"", hasher.finish());
+    HeaderValue::from_str(&value).unwrap_or_else(|_| HeaderValue::from_static("\"0\""))
+}
+
+fn none_match_satisfied(headers: &HeaderMap, etag: &HeaderValue) -> bool {
+    let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) else {
+        return false;
+    };
+    let Ok(if_none_match) = if_none_match.to_str() else {
+        return false;
+    };
+    if if_none_match.trim() == "*" {
+        return true;
+    }
+    let Ok(etag) = etag.to_str() else {
+        return false;
+    };
+    if_none_match.split(',').any(|candidate| {
+        let candidate = candidate.trim().trim_start_matches("W/");
+        candidate == etag
+    })
+}
+
+fn modified_since_satisfied(headers: &HeaderMap, last_modified: SystemTime) -> bool {
+    let Some(if_modified_since) = headers.get(header::IF_MODIFIED_SINCE) else {
+        return false;
+    };
+    let Ok(if_modified_since) = if_modified_since.to_str() else {
+        return false;
+    };
+    let Ok(if_modified_since) = httpdate::parse_http_date(if_modified_since) else {
+        return false;
+    };
+    // HTTP dates only have second-level precision, so truncate last_modified
+    // to match before comparing.
+    let Ok(last_modified) = httpdate::parse_http_date(&httpdate::fmt_http_date(last_modified))
+    else {
+        return false;
+    };
+    last_modified <= if_modified_since
+}
+
 pub async fn serve_userscript(
     State(app): State<AppState>,
+    headers: HeaderMap,
     Path((repo_uuid, script_uuid, slug)): Path<(String, String, String)>,
 ) -> Response {
     let is_meta = if slug.ends_with(".meta.js") {
@@ -301,10 +350,19 @@ pub async fn serve_userscript(
     };
 
     let file_path = format!("{}/{}", repo_config.local_path, relative_path);
-    let content = match tokio::fs::read_to_string(&file_path).await {
-        Ok(c) => c,
+    let (content, last_modified) = match tokio::fs::metadata(&file_path)
+        .await
+        .and_then(|m| m.modified())
+    {
+        Ok(modified) => match tokio::fs::read_to_string(&file_path).await {
+            Ok(c) => (c, modified),
+            Err(e) => {
+                tracing::error!(path = file_path, error = %e, "failed to read script file");
+                return StatusCode::SERVICE_UNAVAILABLE.into_response();
+            }
+        },
         Err(e) => {
-            tracing::error!(path = file_path, error = %e, "failed to read script file");
+            tracing::error!(path = file_path, error = %e, "failed to stat script file");
             return StatusCode::SERVICE_UNAVAILABLE.into_response();
         }
     };
@@ -315,11 +373,34 @@ pub async fn serve_userscript(
         rewrite_userscript(&content, &update_url, &download_url)
     };
 
-    let mut response = Response::new(axum::body::Body::from(body));
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("text/javascript; charset=utf-8"),
-    );
+    let etag = make_etag(&body);
+    let last_modified_value = HeaderValue::from_str(&httpdate::fmt_http_date(last_modified))
+        .unwrap_or_else(|_| HeaderValue::from_static(""));
+
+    let not_modified = none_match_satisfied(&headers, &etag)
+        || (!headers.contains_key(header::IF_NONE_MATCH)
+            && modified_since_satisfied(&headers, last_modified));
+
+    let mut response = if not_modified {
+        let mut response = Response::new(axum::body::Body::empty());
+        *response.status_mut() = StatusCode::NOT_MODIFIED;
+        response
+    } else {
+        let mut response = Response::new(axum::body::Body::from(body));
+        response.headers_mut().insert(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/javascript; charset=utf-8"),
+        );
+        response
+    };
+
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    response.headers_mut().insert(header::ETAG, etag);
+    response
+        .headers_mut()
+        .insert(header::LAST_MODIFIED, last_modified_value);
     response
 }
 
@@ -410,5 +491,51 @@ mod tests {
             "draw-tools"
         );
         assert_eq!(slug_from_path(Path::new("My Plugin.user.js")), "my-plugin");
+    }
+
+    #[test]
+    fn test_etag_stable_and_content_sensitive() {
+        let etag_a = make_etag(SAMPLE);
+        let etag_b = make_etag(SAMPLE);
+        let etag_c = make_etag(SAMPLE_NO_URLS);
+        assert_eq!(etag_a, etag_b);
+        assert_ne!(etag_a, etag_c);
+    }
+
+    #[test]
+    fn test_none_match_satisfied() {
+        let etag = make_etag(SAMPLE);
+        let mut headers = HeaderMap::new();
+        headers.insert(header::IF_NONE_MATCH, etag.clone());
+        assert!(none_match_satisfied(&headers, &etag));
+
+        let mut headers_star = HeaderMap::new();
+        headers_star.insert(header::IF_NONE_MATCH, HeaderValue::from_static("*"));
+        assert!(none_match_satisfied(&headers_star, &etag));
+
+        let mut headers_mismatch = HeaderMap::new();
+        headers_mismatch.insert(header::IF_NONE_MATCH, HeaderValue::from_static("\"other\""));
+        assert!(!none_match_satisfied(&headers_mismatch, &etag));
+
+        assert!(!none_match_satisfied(&HeaderMap::new(), &etag));
+    }
+
+    #[test]
+    fn test_modified_since_satisfied() {
+        let now = SystemTime::now();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::IF_MODIFIED_SINCE,
+            HeaderValue::from_str(&httpdate::fmt_http_date(now)).unwrap(),
+        );
+        assert!(modified_since_satisfied(&headers, now));
+
+        let earlier = now - std::time::Duration::from_secs(60);
+        assert!(modified_since_satisfied(&headers, earlier));
+
+        let later = now + std::time::Duration::from_secs(60);
+        assert!(!modified_since_satisfied(&headers, later));
+
+        assert!(!modified_since_satisfied(&HeaderMap::new(), now));
     }
 }
