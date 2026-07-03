@@ -1,6 +1,6 @@
 [package]
 name = "iitc-script-distributor"
-version = "1.1.1"
+version = "1.2.0"
 edition = "2024"
 
 [[bin]]
@@ -24,7 +24,7 @@ glob = "0.3"
 subtle = "2"
 anyhow = "1"
 base64 = "0.22"
-github-webhook-notification = { git = "https://github.com/KunoiSayami/github-webhook-notification.rs.git" }
+github-webhook-notification = "5.0.0"
 argon2 = { version = "0.6.0-rc.8", features = ["zeroize"] }
 httpdate = "1.0.3"
 

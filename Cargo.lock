@@ -768,8 +768,9 @@ dependencies = [
 
 [[package]]
 name = "github-webhook-notification"
-version = "4.0.1"
-source = "git+https://github.com/KunoiSayami/github-webhook-notification.rs.git#d01842dbb1d407d3beec750a8aaac325b80623d7"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0c371d46b8221058f0091de0bc8db750d55fd4b70ebb82f6eefa2fc5039544d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1101,7 +1102,7 @@ dependencies = [
 
 [[package]]
 name = "iitc-script-distributor"
-version = "1.1.1"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "argon2",
