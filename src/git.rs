@@ -1,12 +1,28 @@
 pub async fn run_git_pull(local_path: &str, branch: &str) -> anyhow::Result<()> {
-    let out = tokio::process::Command::new("git")
-        .args(["-C", local_path, "pull", "--ff-only", "origin", branch])
+    let fetch_out = tokio::process::Command::new("git")
+        .args(["-C", local_path, "fetch", "origin", branch])
         .output()
         .await?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        anyhow::bail!("git pull failed: {stderr}");
+    if !fetch_out.status.success() {
+        let stderr = String::from_utf8_lossy(&fetch_out.stderr);
+        anyhow::bail!("git fetch failed: {stderr}");
     }
+
+    let reset_out = tokio::process::Command::new("git")
+        .args([
+            "-C",
+            local_path,
+            "reset",
+            "--hard",
+            &format!("origin/{branch}"),
+        ])
+        .output()
+        .await?;
+    if !reset_out.status.success() {
+        let stderr = String::from_utf8_lossy(&reset_out.stderr);
+        anyhow::bail!("git reset failed: {stderr}");
+    }
+
     tracing::info!(path = local_path, branch, "git pull succeeded");
     Ok(())
 }
