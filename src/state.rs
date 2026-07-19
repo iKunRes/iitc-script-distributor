@@ -31,6 +31,11 @@ pub struct ScriptEntry {
     pub missing: bool,
     #[serde(default)]
     pub disabled: bool,
+    /// Cross-path identity from the metadata block (`@namespace`/`@id`/`@name`).
+    /// Empty for entries written before identity tracking existed; those are
+    /// backfilled on the next scan that matches them by path.
+    #[serde(default)]
+    pub identity: String,
 }
 
 pub struct SharedState {

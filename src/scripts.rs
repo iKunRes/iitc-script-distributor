@@ -11,10 +11,37 @@ use crate::AppState;
 #[derive(Debug, Default)]
 pub struct ParsedMetadata {
     pub name: String,
+    pub namespace: String,
+    pub id: String,
     pub version: String,
     pub description: String,
     pub update_url: Option<String>,
     pub download_url: Option<String>,
+}
+
+impl ParsedMetadata {
+    /// Stable cross-path identity for a userscript, used to recognise the same
+    /// script when it appears at more than one path (a committed build artifact
+    /// alongside its source, a symlink, or a file that moved between scans).
+    ///
+    /// Prefers `@namespace`+`@id` — the pair userscript managers treat as the
+    /// script's identity — then either alone, then `@namespace`+`@name`, and
+    /// finally `@name`. Returns `None` when the metadata block carries none of
+    /// them, in which case the caller falls back to matching on path.
+    pub fn identity(&self) -> Option<String> {
+        let namespace = self.namespace.trim();
+        let id = self.id.trim();
+        let name = self.name.trim();
+
+        let key = match (namespace.is_empty(), id.is_empty(), name.is_empty()) {
+            (_, false, _) if !namespace.is_empty() => format!("ns:{namespace}\u{1f}id:{id}"),
+            (_, false, _) => format!("id:{id}"),
+            (false, true, false) => format!("ns:{namespace}\u{1f}name:{name}"),
+            (true, true, false) => format!("name:{name}"),
+            _ => return None,
+        };
+        Some(key.to_lowercase())
+    }
 }
 
 pub fn parse_metadata(content: &str) -> ParsedMetadata {
@@ -47,6 +74,16 @@ pub fn parse_metadata(content: &str) -> ParsedMetadata {
             "@name" => {
                 if meta.name.is_empty() {
                     meta.name = value;
+                }
+            }
+            "@namespace" => {
+                if meta.namespace.is_empty() {
+                    meta.namespace = value;
+                }
+            }
+            "@id" => {
+                if meta.id.is_empty() {
+                    meta.id = value;
                 }
             }
             "@version" => {
@@ -438,6 +475,58 @@ mod tests {
             meta.update_url.as_deref(),
             Some("https://old.example.com/draw-tools.meta.js")
         );
+    }
+
+    #[test]
+    fn test_identity_prefers_namespace_and_id() {
+        let meta = parse_metadata(
+            "// ==UserScript==\n\
+             // @name        Portal Details Checker\n\
+             // @id          portal-details-checker\n\
+             // @namespace   local://portal-details-checker\n\
+             // ==/UserScript==\n",
+        );
+        assert_eq!(meta.id, "portal-details-checker");
+        assert_eq!(meta.namespace, "local://portal-details-checker");
+        assert_eq!(
+            meta.identity().as_deref(),
+            Some("ns:local://portal-details-checker\u{1f}id:portal-details-checker")
+        );
+    }
+
+    #[test]
+    fn test_identity_matches_across_paths_and_case() {
+        // The same script committed at two paths must produce one identity.
+        let source = parse_metadata(
+            "// ==UserScript==\n\
+             // @name      Portal Details Checker\n\
+             // @id        Portal-Details-Checker\n\
+             // @namespace local://pdc\n\
+             // ==/UserScript==\n",
+        );
+        let artifact = parse_metadata(
+            "// ==UserScript==\n\
+             // @name      Portal Details Checker\n\
+             // @id        portal-details-checker\n\
+             // @namespace LOCAL://PDC\n\
+             // ==/UserScript==\n",
+        );
+        assert_eq!(source.identity(), artifact.identity());
+    }
+
+    #[test]
+    fn test_identity_falls_back_and_distinguishes_scripts() {
+        let name_only =
+            parse_metadata("// ==UserScript==\n// @name Draw Tools\n// ==/UserScript==\n");
+        assert_eq!(name_only.identity().as_deref(), Some("name:draw tools"));
+
+        // Distinct scripts must not collide.
+        let other =
+            parse_metadata("// ==UserScript==\n// @name Other Plugin\n// ==/UserScript==\n");
+        assert_ne!(name_only.identity(), other.identity());
+
+        // No usable metadata -> caller falls back to path matching.
+        assert_eq!(parse_metadata("// just code\n").identity(), None);
     }
 
     #[test]
