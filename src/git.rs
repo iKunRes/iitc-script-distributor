@@ -1,6 +1,26 @@
-pub async fn run_git_pull(local_path: &str, branch: &str) -> anyhow::Result<()> {
+use crate::github_app::basic_auth_header_value;
+
+fn auth_args(gh_token: Option<&str>) -> Vec<String> {
+    match gh_token {
+        Some(token) => vec![
+            "-c".to_string(),
+            format!("http.extraHeader={}", basic_auth_header_value(token)),
+        ],
+        None => Vec::new(),
+    }
+}
+
+pub async fn run_git_pull(
+    local_path: &str,
+    branch: &str,
+    gh_token: Option<&str>,
+) -> anyhow::Result<()> {
+    let auth = auth_args(gh_token);
+
     let fetch_out = tokio::process::Command::new("git")
-        .args(["-C", local_path, "fetch", "origin", branch])
+        .args(["-C", local_path])
+        .args(&auth)
+        .args(["fetch", "origin", branch])
         .output()
         .await?;
     if !fetch_out.status.success() {
@@ -27,8 +47,16 @@ pub async fn run_git_pull(local_path: &str, branch: &str) -> anyhow::Result<()> 
     Ok(())
 }
 
-pub async fn run_git_clone(git_url: &str, local_path: &str, branch: &str) -> anyhow::Result<()> {
+pub async fn run_git_clone(
+    git_url: &str,
+    local_path: &str,
+    branch: &str,
+    gh_token: Option<&str>,
+) -> anyhow::Result<()> {
+    let auth = auth_args(gh_token);
+
     let out = tokio::process::Command::new("git")
+        .args(&auth)
         .args(["clone", "--branch", branch, git_url, local_path])
         .output()
         .await?;

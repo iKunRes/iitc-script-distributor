@@ -15,6 +15,13 @@ password = "changeme"
 [api]
 require_auth = true   # set false to expose GET /api/scripts publicly
 
+# Optional: shared GitHub App used by any repo with `[repos.auth] mode = "github_app"`
+# below. Lets the server clone/pull private repos without an SSH deploy key or a
+# long-lived PAT embedded in git_url.
+#[github_app]
+#app_id           = 123456
+#private_key_path = "/etc/iitc-script-distributor/app-private-key.pem"
+
 [[repos]]
 # uuid is auto-generated and written back if absent
 name           = "iitc-community"
@@ -23,3 +30,18 @@ local_path     = "/srv/scripts/iitc-community"
 webhook_secret = "your-github-webhook-secret"
 scripts_glob   = "**/*.user.js"
 branch         = "master"
+
+# Example: authenticate clone/fetch via a GitHub App installation instead of a
+# public/anonymous clone (requires the [github_app] block above and an
+# https://github.com/... git_url; the installation must have access to the repo).
+#[[repos]]
+#name           = "private-example"
+#git_url        = "https://github.com/my-org/private-example.git"
+#local_path     = "/srv/scripts/private-example"
+#webhook_secret = "another-github-webhook-secret"
+#branch         = "main"
+#
+#[repos.auth]
+#mode  = "github_app"
+#owner = "my-org"
+#repo  = "private-example"

@@ -99,7 +99,17 @@ pub async fn handle_webhook(
             key: repo_uuid.clone(),
         };
 
-        if let Err(e) = crate::git::run_git_pull(&repo.local_path, &repo.branch).await {
+        let gh_token = match crate::resolve_gh_token(&app_clone, &repo).await {
+            Ok(t) => t,
+            Err(e) => {
+                tracing::error!(repo = repo.name, error = %e, "failed to obtain GitHub App token");
+                return;
+            }
+        };
+
+        if let Err(e) =
+            crate::git::run_git_pull(&repo.local_path, &repo.branch, gh_token.as_deref()).await
+        {
             tracing::error!(repo = repo.name, error = %e, "git pull failed");
             return;
         }

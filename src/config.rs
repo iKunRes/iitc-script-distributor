@@ -13,7 +13,15 @@ pub struct Config {
     #[serde(default)]
     pub api: ApiConfig,
     #[serde(default)]
+    pub github_app: Option<GithubAppConfig>,
+    #[serde(default)]
     pub repos: Vec<RepoConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GithubAppConfig {
+    pub app_id: u64,
+    pub private_key_path: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -79,6 +87,8 @@ pub struct RepoConfig {
     pub scripts_glob: String,
     #[serde(default = "default_branch")]
     pub branch: String,
+    #[serde(default)]
+    pub auth: Option<RepoAuthConfig>,
 }
 
 impl RepoConfig {
@@ -95,6 +105,12 @@ impl RepoConfig {
     pub fn set_uuid(&mut self, uuid: String) {
         self.uuid = Some(uuid);
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum RepoAuthConfig {
+    GithubApp { owner: String, repo: String },
 }
 
 fn default_glob() -> String {

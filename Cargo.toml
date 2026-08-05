@@ -27,6 +27,15 @@ base64 = "0.22"
 github-webhook-notification = "5.0.0"
 argon2 = { version = "0.6.0-rc.8", features = ["zeroize"] }
 httpdate = "1.0.3"
+jsonwebtoken = { version = "10", default-features = false, features = [
+    "aws_lc_rs",
+    "use_pem",
+] }
+reqwest = { version = "0.13", default-features = false, features = [
+    "rustls",
+    "json",
+] }
+dashmap = "6"
 
 [profile.release]
 lto = true
