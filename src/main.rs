@@ -162,6 +162,24 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // For repos using GitHub App auth, make sure a push webhook pointed at this
+    // server is registered on GitHub, creating one if none matches yet.
+    if let Some(auth) = &github_app {
+        let base = cfg.public_base_url.trim_end_matches('/');
+        for repo in &cfg.repos {
+            if let Some(RepoAuthConfig::GithubApp { owner, repo: name }) = &repo.auth {
+                let Some(uuid) = &repo.uuid else { continue };
+                let webhook_url = format!("{base}/webhook/{uuid}");
+                if let Err(e) = auth
+                    .ensure_webhook(owner, name, &webhook_url, &repo.webhook_secret)
+                    .await
+                {
+                    tracing::warn!(repo = repo.name, error = %e, "failed to auto-configure GitHub webhook");
+                }
+            }
+        }
+    }
+
     // Build per-repo busy flags
     let pull_busy: HashMap<String, AtomicBool> = cfg
         .repos

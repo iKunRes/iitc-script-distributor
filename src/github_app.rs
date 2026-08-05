@@ -27,6 +27,31 @@ struct AccessTokenResponse {
     token: String,
 }
 
+#[derive(Deserialize)]
+struct HookConfig {
+    url: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct Hook {
+    config: HookConfig,
+}
+
+#[derive(Serialize)]
+struct CreateHookConfig<'a> {
+    url: &'a str,
+    content_type: &'a str,
+    secret: &'a str,
+}
+
+#[derive(Serialize)]
+struct CreateHookRequest<'a> {
+    name: &'a str,
+    active: bool,
+    events: &'a [&'a str],
+    config: CreateHookConfig<'a>,
+}
+
 /// Builds the `http.extraHeader` config value for a GitHub App installation token,
 /// suitable for `git -c http.extraHeader=<value>`, so the token never appears in
 /// process listings or in the repo's `git_url`.
@@ -136,6 +161,66 @@ impl GithubAppAuth {
         }
 
         self.fetch_installation_token(installation_id).await
+    }
+
+    /// Ensures `owner/repo` has an active webhook pointed at `webhook_url`, creating one
+    /// via the installation token if none matching that URL already exists.
+    pub async fn ensure_webhook(
+        &self,
+        owner: &str,
+        repo: &str,
+        webhook_url: &str,
+        secret: &str,
+    ) -> anyhow::Result<()> {
+        let token = self.get_token(owner, repo).await?;
+        let hooks_url = format!("https://api.github.com/repos/{owner}/{repo}/hooks");
+
+        let existing = self
+            .client
+            .get(&hooks_url)
+            .bearer_auth(&token)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .send()
+            .await
+            .with_context(|| format!("Failed to list webhooks for {owner}/{repo}"))?
+            .error_for_status()
+            .with_context(|| format!("GitHub API error listing webhooks for {owner}/{repo}"))?
+            .json::<Vec<Hook>>()
+            .await
+            .context("Failed to parse webhook list response")?;
+
+        if existing
+            .iter()
+            .any(|h| h.config.url.as_deref() == Some(webhook_url))
+        {
+            return Ok(());
+        }
+
+        let body = CreateHookRequest {
+            name: "web",
+            active: true,
+            events: &["push"],
+            config: CreateHookConfig {
+                url: webhook_url,
+                content_type: "json",
+                secret,
+            },
+        };
+
+        self.client
+            .post(&hooks_url)
+            .bearer_auth(&token)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .json(&body)
+            .send()
+            .await
+            .with_context(|| format!("Failed to create webhook for {owner}/{repo}"))?
+            .error_for_status()
+            .with_context(|| format!("GitHub API error creating webhook for {owner}/{repo}"))?;
+
+        Ok(())
     }
 }
 

@@ -17,7 +17,9 @@ require_auth = true   # set false to expose GET /api/scripts publicly
 
 # Optional: shared GitHub App used by any repo with `[repos.auth] mode = "github_app"`
 # below. Lets the server clone/pull private repos without an SSH deploy key or a
-# long-lived PAT embedded in git_url.
+# long-lived PAT embedded in git_url. At startup, any repo using this auth mode
+# also gets its GitHub push webhook auto-created/verified against public_base_url
+# (requires the app installation to have the "Webhooks" repository permission).
 #[github_app]
 #app_id           = 123456
 #private_key_path = "/etc/iitc-script-distributor/app-private-key.pem"
