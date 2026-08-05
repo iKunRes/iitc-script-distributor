@@ -22,6 +22,8 @@ function copyText(text, el) {
 <div class="flash flash-pull-busy">UUID unchanged (empty or same value).</div>
 {% elif flash == "disabled-toggled" %}
 <div class="flash flash-saved">Script access toggled.</div>
+{% elif flash == "rewrite-disabled-toggled" %}
+<div class="flash flash-saved">URL rewrite toggled.</div>
 {% endif %}
 
 {% for repo in repos %}
@@ -54,6 +56,7 @@ function copyText(text, el) {
         {% if s.has_override %}<span class="override-badge">override</span>{% endif %}
         {% if s.missing %} <em>(missing)</em>{% endif %}
         {% if s.disabled %}<span class="disabled-badge">disabled</span>{% endif %}
+        {% if s.rewrite_disabled %}<span class="disabled-badge">no rewrite</span>{% endif %}
       </td>
       <td>{{ s.version }}</td>
       <td class="url-cell"><a href="{{ s.effective_download_url }}" target="_blank" title="{{ s.effective_download_url }}">{{ s.effective_download_url }}</a></td>
@@ -63,6 +66,9 @@ function copyText(text, el) {
         <button type="button" onclick="copyText('{{ s.effective_download_url }}', this)">Copy Link</button>
         <form class="inline" method="POST" action="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/toggle-disabled">
           <button type="submit">{% if s.disabled %}Enable{% else %}Disable{% endif %}</button>
+        </form>
+        <form class="inline" method="POST" action="/admin/scripts/{{ s.repo_uuid }}/{{ s.uuid }}/toggle-rewrite-disabled">
+          <button type="submit">{% if s.rewrite_disabled %}Enable rewrite{% else %}Disable rewrite{% endif %}</button>
         </form>
       </td>
     </tr>

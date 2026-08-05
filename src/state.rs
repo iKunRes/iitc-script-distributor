@@ -31,6 +31,11 @@ pub struct ScriptEntry {
     pub missing: bool,
     #[serde(default)]
     pub disabled: bool,
+    /// When set, the script is served as-is: `@updateURL`/`@downloadURL`
+    /// are left untouched instead of being rewritten to point at this
+    /// distributor's URLs.
+    #[serde(default)]
+    pub rewrite_disabled: bool,
     /// Cross-path identity from the metadata block (`@namespace`/`@id`/`@name`).
     /// Empty for entries written before identity tracking existed; those are
     /// backfilled on the next scan that matches them by path.

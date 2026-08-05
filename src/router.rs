@@ -35,6 +35,10 @@ pub fn build_router(state: AppState) -> Router {
             post(admin::handlers::toggle_disabled_post),
         )
         .route(
+            "/scripts/{repo_uuid}/{script_uuid}/toggle-rewrite-disabled",
+            post(admin::handlers::toggle_rewrite_disabled_post),
+        )
+        .route(
             "/repos/{repo_uuid}/uuid",
             get(admin::handlers::repo_uuid_form).post(admin::handlers::repo_uuid_post),
         )

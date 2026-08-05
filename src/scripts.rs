@@ -276,6 +276,35 @@ pub fn extract_metadata_block(content: &str, update_url: &str, download_url: &st
     result
 }
 
+/// Extracts the `==UserScript==` metadata block as-is, without touching
+/// any `@updateURL`/`@downloadURL` directives.
+pub fn extract_metadata_block_verbatim(content: &str) -> String {
+    let mut block: Vec<&str> = Vec::new();
+    let mut in_block = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "// ==UserScript==" {
+            in_block = true;
+            block.push(line);
+            continue;
+        }
+        if !in_block {
+            continue;
+        }
+        block.push(line);
+        if trimmed == "// ==/UserScript==" {
+            break;
+        }
+    }
+
+    let mut result = block.join("\n");
+    if !result.is_empty() {
+        result.push('\n');
+    }
+    result
+}
+
 fn make_etag(body: &str) -> HeaderValue {
     let mut hasher = DefaultHasher::new();
     body.hash(&mut hasher);
@@ -340,7 +369,7 @@ pub async fn serve_userscript(
         slug.trim_end_matches(".user.js")
     };
 
-    let (relative_path, update_url, download_url) = {
+    let (relative_path, update_url, download_url, entry_rewrite_disabled) = {
         let state = app.state.read().await;
         let repo_state = match state.repos.get(&repo_uuid) {
             Some(r) => r,
@@ -373,7 +402,12 @@ pub async fn serve_userscript(
                 entry.url_slug
             )
         });
-        (entry.relative_path.clone(), update_url, download_url)
+        (
+            entry.relative_path.clone(),
+            update_url,
+            download_url,
+            entry.rewrite_disabled,
+        )
     };
 
     let repo_config = match app
@@ -404,7 +438,13 @@ pub async fn serve_userscript(
         }
     };
 
-    let body = if is_meta {
+    let body = if entry_rewrite_disabled {
+        if is_meta {
+            extract_metadata_block_verbatim(&content)
+        } else {
+            content.clone()
+        }
+    } else if is_meta {
         extract_metadata_block(&content, &update_url, &download_url)
     } else {
         rewrite_userscript(&content, &update_url, &download_url)
@@ -571,6 +611,23 @@ mod tests {
         assert!(out.contains("// ==/UserScript=="));
         assert!(!out.contains("/* code */"));
         assert!(out.contains("@updateURL     https://new.example.com/draw-tools.meta.js"));
+    }
+
+    #[test]
+    fn test_extract_metadata_block_verbatim_keeps_original_urls() {
+        let out = extract_metadata_block_verbatim(SAMPLE);
+        assert!(out.contains("// ==UserScript=="));
+        assert!(out.contains("// ==/UserScript=="));
+        assert!(!out.contains("/* code */"));
+        assert!(out.contains("@updateURL    https://old.example.com/draw-tools.meta.js"));
+        assert!(out.contains("@downloadURL  https://old.example.com/draw-tools.user.js"));
+    }
+
+    #[test]
+    fn test_extract_metadata_block_verbatim_does_not_inject_urls() {
+        let out = extract_metadata_block_verbatim(SAMPLE_NO_URLS);
+        assert!(!out.contains("@updateURL"));
+        assert!(!out.contains("@downloadURL"));
     }
 
     #[test]

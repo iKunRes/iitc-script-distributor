@@ -27,6 +27,7 @@ struct ScriptView {
     has_override: bool,
     missing: bool,
     disabled: bool,
+    rewrite_disabled: bool,
 }
 
 #[derive(Debug)]
@@ -78,6 +79,7 @@ pub async fn list(State(app): State<AppState>, Query(q): Query<FlashQuery>) -> R
                         || entry.url_override_download.is_some(),
                     missing: entry.missing,
                     disabled: entry.disabled,
+                    rewrite_disabled: entry.rewrite_disabled,
                 });
             }
         }
@@ -107,6 +109,7 @@ pub async fn list(State(app): State<AppState>, Query(q): Query<FlashQuery>) -> R
                         has_override: s.has_override,
                         missing: s.missing,
                         disabled: s.disabled,
+                        rewrite_disabled: s.rewrite_disabled,
                     })
                 })
                 .collect();
@@ -407,6 +410,29 @@ pub async fn toggle_disabled_post(
     Redirect::to("/admin?flash=disabled-toggled").into_response()
 }
 
+pub async fn toggle_rewrite_disabled_post(
+    State(app): State<AppState>,
+    Path((repo_uuid, script_uuid)): Path<(String, String)>,
+) -> Response {
+    let result = app
+        .state
+        .write_and_save(|state| {
+            if let Some(repo_state) = state.repos.get_mut(&repo_uuid) {
+                if let Some(entry) = repo_state.scripts.get_mut(&script_uuid) {
+                    entry.rewrite_disabled = !entry.rewrite_disabled;
+                }
+            }
+        })
+        .await;
+
+    if let Err(e) = result {
+        tracing::error!(error = %e, "failed to save state after toggle rewrite disabled");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    Redirect::to("/admin?flash=rewrite-disabled-toggled").into_response()
+}
+
 fn non_empty(s: String) -> Option<String> {
     if s.trim().is_empty() { None } else { Some(s) }
 }
@@ -444,6 +470,7 @@ struct ScriptViewObj {
     has_override: bool,
     missing: bool,
     disabled: bool,
+    rewrite_disabled: bool,
 }
 
 impl minijinja::value::Object for ScriptViewObj {
@@ -464,6 +491,7 @@ impl minijinja::value::Object for ScriptViewObj {
             "has_override" => Some(minijinja::Value::from(self.has_override)),
             "missing" => Some(minijinja::Value::from(self.missing)),
             "disabled" => Some(minijinja::Value::from(self.disabled)),
+            "rewrite_disabled" => Some(minijinja::Value::from(self.rewrite_disabled)),
             _ => None,
         }
     }

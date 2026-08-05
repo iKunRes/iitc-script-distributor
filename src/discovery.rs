@@ -199,7 +199,8 @@ pub async fn scan_repo(repo: &RepoConfig, app: &AppState) -> anyhow::Result<()> 
                     let path_match = entry.relative_path != s.relative_path;
                     let untouched = entry.url_override_update.is_none()
                         && entry.url_override_download.is_none()
-                        && !entry.disabled;
+                        && !entry.disabled
+                        && !entry.rewrite_disabled;
                     (path_match, untouched, uuid.clone())
                 });
 
@@ -224,6 +225,7 @@ pub async fn scan_repo(repo: &RepoConfig, app: &AppState) -> anyhow::Result<()> 
                                 .take()
                                 .or(old.url_override_download);
                             entry.disabled = entry.disabled || old.disabled;
+                            entry.rewrite_disabled = entry.rewrite_disabled || old.rewrite_disabled;
                             repaired_count += 1;
                             tracing::info!(
                                 kept = uuid,
@@ -258,6 +260,7 @@ pub async fn scan_repo(repo: &RepoConfig, app: &AppState) -> anyhow::Result<()> 
                             url_override_download: None,
                             missing: false,
                             disabled: false,
+                            rewrite_disabled: false,
                             identity: s.identity.unwrap_or_default(),
                         },
                     );
