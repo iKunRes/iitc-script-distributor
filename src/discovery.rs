@@ -8,20 +8,34 @@ use crate::state::ScriptEntry;
 
 pub async fn scan_repo(repo: &RepoConfig, app: &AppState) -> anyhow::Result<()> {
     let repo_uuid = repo.uuid.clone().expect("repo must have uuid before scan");
-    let pattern = format!("{}/{}", repo.local_path, repo.scripts_glob);
+    let patterns: Vec<String> = repo
+        .scripts_glob
+        .iter()
+        .map(|g| format!("{}/{}", repo.local_path, g))
+        .collect();
     let local_path = repo.local_path.clone();
 
     let paths = tokio::task::spawn_blocking(move || {
-        glob::glob(&pattern)
-            .map_err(|e| anyhow::anyhow!("invalid glob pattern: {e}"))?
-            .filter_map(|entry| match entry {
-                Ok(p) => Some(Ok(p)),
-                Err(e) => {
-                    tracing::warn!("glob error: {e}");
-                    None
+        let mut seen = HashSet::new();
+        let mut paths = Vec::new();
+        for pattern in patterns {
+            let matches = glob::glob(&pattern)
+                .map_err(|e| anyhow::anyhow!("invalid glob pattern: {e}"))?
+                .filter_map(|entry| match entry {
+                    Ok(p) => Some(Ok(p)),
+                    Err(e) => {
+                        tracing::warn!("glob error: {e}");
+                        None
+                    }
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            for p in matches {
+                if seen.insert(p.clone()) {
+                    paths.push(p);
                 }
-            })
-            .collect::<anyhow::Result<Vec<_>>>()
+            }
+        }
+        Ok::<_, anyhow::Error>(paths)
     })
     .await??;
 

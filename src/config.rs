@@ -83,8 +83,11 @@ pub struct RepoConfig {
     pub git_url: String,
     pub local_path: String,
     pub webhook_secret: String,
-    #[serde(default = "default_glob")]
-    pub scripts_glob: String,
+    #[serde(
+        default = "default_glob",
+        deserialize_with = "deserialize_scripts_glob"
+    )]
+    pub scripts_glob: Vec<String>,
     #[serde(default = "default_branch")]
     pub branch: String,
     #[serde(default)]
@@ -113,8 +116,31 @@ pub enum RepoAuthConfig {
     GithubApp { owner: String, repo: String },
 }
 
-fn default_glob() -> String {
-    "**/*.user.js".to_string()
+fn default_glob() -> Vec<String> {
+    vec!["**/*.user.js".to_string()]
+}
+
+/// Accepts either a single glob string or an array of globs, so existing
+/// single-string configs keep working unchanged.
+fn deserialize_scripts_glob<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let value = toml::Value::deserialize(deserializer)?;
+    match value {
+        toml::Value::String(s) => Ok(vec![s]),
+        toml::Value::Array(arr) => arr
+            .into_iter()
+            .map(|v| match v {
+                toml::Value::String(s) => Ok(s),
+                other => Err(D::Error::custom(format!("expected string, got {other}"))),
+            })
+            .collect(),
+        other => Err(D::Error::custom(format!(
+            "scripts_glob must be a string or array of strings, got {other}"
+        ))),
+    }
 }
 
 fn default_branch() -> String {
@@ -125,4 +151,46 @@ pub fn load_config(path: &Path) -> anyhow::Result<Config> {
     let content = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read config file {}", path.display()))?;
     toml::from_str(&content).context("failed to parse config.toml")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn repo_toml(extra: &str) -> String {
+        format!(
+            r#"
+            name = "a"
+            git_url = "b"
+            local_path = "c"
+            webhook_secret = "d"
+            {extra}
+            "#
+        )
+    }
+
+    #[test]
+    fn scripts_glob_accepts_single_string() {
+        let repo: RepoConfig =
+            toml::from_str(&repo_toml(r#"scripts_glob = "**/*.user.js""#)).unwrap();
+        assert_eq!(repo.scripts_glob, vec!["**/*.user.js".to_string()]);
+    }
+
+    #[test]
+    fn scripts_glob_accepts_array() {
+        let repo: RepoConfig = toml::from_str(&repo_toml(
+            r#"scripts_glob = ["**/*.user.js", "**/*.meta.js"]"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            repo.scripts_glob,
+            vec!["**/*.user.js".to_string(), "**/*.meta.js".to_string()]
+        );
+    }
+
+    #[test]
+    fn scripts_glob_defaults_when_absent() {
+        let repo: RepoConfig = toml::from_str(&repo_toml("")).unwrap();
+        assert_eq!(repo.scripts_glob, vec!["**/*.user.js".to_string()]);
+    }
 }

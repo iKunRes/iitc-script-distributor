@@ -63,7 +63,7 @@ name           = "iitc-community"
 git_url        = "https://github.com/IITC-CE/ingress-intel-total-conversion.git"
 local_path     = "/srv/scripts/iitc-community"
 webhook_secret = "your-github-webhook-secret"
-scripts_glob   = "**/*.user.js"
+scripts_glob   = "**/*.user.js"  # array or single glob pattern
 branch         = "master"
 ```
 
